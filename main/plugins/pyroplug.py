@@ -1,134 +1,60 @@
-# Github.com/Vasusen-code
+#Github.com/Vasusen-code
 
-import asyncio, time, os
+import time, os
 
-from .. import Bot, bot
-from main.plugins.progress import progress_for_pyrogram
-from main.plugins.helpers import screenshot
+from .. import bot as Drone
+from .. import userbot, Bot
+from .. import FORCESUB as fs
+from main.plugins.pyroplug import get_msg
+from main.plugins.helpers import get_link, join, screenshot
 
-from pyrogram import Client, filters
-from pyrogram.errors import ChannelBanned, ChannelInvalid, ChannelPrivate, ChatIdInvalid, ChatInvalid
-from ethon.pyfunc import video_metadata
 from telethon import events
+from pyrogram.errors import FloodWait
 
-def thumbnail(sender):
-    if os.path.exists(f'{sender}.jpg'):
-        return f'{sender}.jpg'
-    else:
-         return None
-      
-async def check(userbot, client, link):
-    msg_id = int(link.split("/")[-1])
-    if 't.me/c/' in link:
-        try:
-            chat = int('-100' + str(link.split("/")[-2]))
-            await userbot.get_messages(chat, msg_id)
-            return True, None
-        except ValueError:
-            return False, "**Invalid Link!**"
-        except Exception:
-            return False, "Have you joined the channel?"
-    else:
-        try:
-            chat = str(link.split("/")[-2])
-            await client.get_messages(chat, msg_id)
-            return True, None
-        except Exception:
-            return False, "Maybe bot is banned from the chat, or your link is invalid!"
-            
-async def get_msg(userbot, client, sender, edit_id, msg_link, i):
-    edit = ""
-    chat = ""
-    msg_id = int(msg_link.split("/")[-1]) + int(i)
-    if 't.me/c/' in msg_link:
-        chat = int('-100' + str(msg_link.split("/")[-2]))
-        try:
-            msg = await userbot.get_messages(chat, msg_id)
-            if msg.media:
-                if 'web_page' in msg.media:
-                    edit = await client.edit_message_text(sender, edit_id, "Cloning.")
-                    await client.send_message(sender, msg.text.markdown)
-                    await edit.delete()
-                    return
-            if not msg.media:
-                if msg.text:
-                    edit = await client.edit_message_text(sender, edit_id, "Cloning.")
-                    await client.send_message(sender, msg.text.markdown)
-                    await edit.delete()
-                    return
-            edit = await client.edit_message_text(sender, edit_id, "Trying to Download.")
-            file = await userbot.download_media(
-                msg,
-                progress=progress_for_pyrogram,
-                progress_args=(
-                    client,
-                    "**DOWNLOADING:**\n",
-                    edit,
-                    time.time()
-                )
-            )
-            await edit.edit('Prearing to Upload!')
-            caption = str(file)
-            if msg.caption is not None:
-                caption = msg.caption
-            if str(file).split(".")[-1] in ['mkv', 'mp4', 'webm']:
-                if str(file).split(".")[-1] in ['webm', 'mkv']:
-                    path = str(file).split(".")[0] + ".mp4"
-                    os.rename(file, path) 
-                    file = str(file).split(".")[0] + ".mp4"
-                data = video_metadata(file)
-                duration = data["duration"]
-                thumb_path = await screenshot(file, duration, sender)
-                await client.send_video(
-                    chat_id=sender,
-                    video=file,
-                    caption=caption,
-                    supports_streaming=True,
-                    duration=duration,
-                    thumb=thumb_path,
-                    progress=progress_for_pyrogram,
-                    progress_args=(
-                        client,
-                        '**UPLOADING:**\n',
-                        edit,
-                        time.time()
-                    )
-                )
-            elif str(file).split(".")[-1] in ['jpg', 'jpeg', 'png', 'webp']:
-                await edit.edit("Uploading photo.")
-                await bot.send_file(sender, file, caption=caption)
-            else:
-                thumb_path=thumbnail(sender)
-                await client.send_document(
-                    sender,
-                    file, 
-                    caption=caption,
-                    thumb=thumb_path,
-                    progress=progress_for_pyrogram,
-                    progress_args=(
-                        client,
-                        '**UPLOADING:**\n',
-                        edit,
-                        time.time()
-                    )
-                )
-            await edit.delete()
-        except (ChannelBanned, ChannelInvalid, ChannelPrivate, ChatIdInvalid, ChatInvalid):
-            await client.edit_message_text(sender, edit_id, "Have you joined the channel?")
-            return 
-        except Exception as e:
-            await client.edit_message_text(sender, edit_id, f'Failed to save: `{msg_link}`')
-            return 
-    else:
-        edit = await client.edit_message_text(sender, edit_id, "Cloning.")
-        chat =  msg_link.split("/")[-2]
-        try:
-            await client.copy_message(int(sender), chat, msg_id)
-        except Exception as e:
-            print(e)
-            return await client.edit_message_text(sender, edit_id, f'Failed to save: `{msg_link}`')
-        await edit.delete()
-        
-async def get_bulk_msg(userbot, client, sender, msg_link, i):
-    x = await client.send_message(sender, "Processing!")
-    await get_msg(userbot, client, sender, x.message_id, msg_link, i) 
+from ethon.telefunc import force_sub
+
+ft = f"To use this bot you've to join @{fs}."
+
+message = "Send me the message link you want to start saving from, as a reply to this message."
+          
+process=[]
+timer=[]
+user=[]
+
+# To-Do:
+# Make these codes shorter and clean
+# ofc will never do it. 
+
+@Drone.on(events.NewMessage(incoming=True, func=lambda e: e.is_private))
+async def clone(event):
+    if event.is_reply:
+        reply = await event.get_reply_message()
+        if reply.text == message:
+            return
+    try:
+        link = get_link(event.text)
+        if not link:
+            return
+    except TypeError:
+        return
+    s, r = await force_sub(event.client, fs, event.sender_id, ft)
+    if s == True:
+        await event.reply(r)
+        return
+    edit = await event.reply("Processing!")
+    if f'{int(event.sender_id)}' in user:
+        return await edit.edit("Please don't spam links, wait until ongoing process is done.")
+    user.append(f'{int(event.sender_id)}')
+    try:
+        if 't.me/+' in link:
+            q = await join(userbot, link)
+            await edit.edit(q)
+        if 't.me/' in link:
+            await get_msg(userbot, Bot, event.sender_id, edit.id, link, 0)
+    except FloodWait as fw:
+        await Drone.send_message(event.sender_id, f'Try again after {fw.x} seconds due to floodwait from telegram.')
+    except Exception as e:
+        print(e)
+        await Drone.send_message(event.sender_id, f"An error occurred during cloning of `{link}`\n\n**Error:** {str(e)}")
+    ind = user.index(f'{int(event.sender_id)}')
+    user.pop(int(ind))
